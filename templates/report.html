@@ -17,7 +17,7 @@
 
     <h2 class="mb-3 text-center">HRV 自律神經體質分析報告</h2>
 
-    <!-- 基本資訊 -->
+    <!-- 基本資料 -->
     <div class="card shadow-sm">
       <div class="card-body">
         <h5 class="card-title">基本資料</h5>
@@ -30,36 +30,44 @@
       </div>
     </div>
 
+    <!-- 身體指標 -->
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title">身體指標</h5>
+        <div class="row">
+          <div class="col-md-3"><span class="kv-label">BMI：</span>{{ row.BMI }}</div>
+          <div class="col-md-3"><span class="kv-label">BMI 狀況：</span>{{ row.BMI_Status }}</div>
+          <div class="col-md-3"><span class="kv-label">自律神經年齡：</span>{{ row.ANS_Age }}</div>
+          <div class="col-md-3"><span class="kv-label">ANS 年齡差值：</span>{{ row.ANS_Age_Diff }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- HRV 指標摘要 -->
     <div class="card shadow-sm">
       <div class="card-body">
         <h5 class="card-title">HRV 指標摘要</h5>
 
-        <div class="table-responsive">
-          <table class="table table-sm table-bordered align-middle">
-            <thead class="table-light">
-              <tr>
-                <th>LF</th>
-                <th>HF</th>
-                <th>TP</th>
-                <th>ln(LF/HF)</th>
-                <th>ln(TP)</th>
-                <th>TP_Q（能量效率）</th>
-              </tr>
-            </thead>
+        <table class="table table-bordered table-sm">
+          <thead class="table-light">
+            <tr>
+              <th>LF</th><th>HF</th><th>TP</th>
+              <th>ln(LF/HF)</th><th>ln(TP)</th>
+              <th>TP_Q（能量效率）</th>
+            </tr>
+          </thead>
 
-            <tbody>
-              <tr>
-                <td>{{ row.LF }}</td>
-                <td>{{ row.HF }}</td>
-                <td>{{ row.TP }}</td>
-                <td>{{ row.ln_LF_HF }}</td>
-                <td>{{ row.ln_TP }}</td>
-                <td>{{ row.TP_Q }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          <tbody>
+            <tr>
+              <td>{{ row.LF }}</td>
+              <td>{{ row.HF }}</td>
+              <td>{{ row.TP }}</td>
+              <td>{{ row.ln_LF_HF }}</td>
+              <td>{{ row.ln_TP }}</td>
+              <td>{{ row.TP_Q }}</td>
+            </tr>
+          </tbody>
+        </table>
 
       </div>
     </div>
@@ -86,7 +94,7 @@
         <h5 class="card-title">ln(LF/HF) × ln(TP) 四象限圖</h5>
         <p class="text-muted">
           X 軸：ln(TP)（虛 → 實） · Y 軸：ln(LF/HF)（陰 → 陽）<br>
-          綠色區域為根據 Kuo(1999) 設定之年齡 × 性別健康參考範圍。
+          綠色區域為 Kuo(1999) 年齡 × 性別健康參考範圍。
         </p>
 
         <img src="data:image/png;base64,{{ quad_img_b64 }}" 
@@ -98,6 +106,7 @@
 
     <div class="text-center mt-4">
       <a href="/" class="btn btn-secondary">回首頁重新分析</a>
+      <a href="/export_pdf" class="btn btn-danger">下載 PDF 報告</a>
     </div>
 
   </div>
