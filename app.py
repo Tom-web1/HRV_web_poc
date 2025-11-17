@@ -1,4 +1,3 @@
-# app.py
 from flask import Flask, render_template, request
 from hrv_core import (
     parse_hrv_xml_to_row,
@@ -12,6 +11,10 @@ app = Flask(
     template_folder="templates"
 )
 
+@app.route("/health")
+def health():
+    return "OK", 200
+
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -22,7 +25,6 @@ def index():
         if not xml_file and not xml_text:
             return render_template("index.html", error="請上傳 XML 檔案或貼上 XML 內容。")
 
-        # 1) 優先使用上傳檔案，其次使用貼上的文字
         if xml_file:
             xml_bytes = xml_file.read()
             xml_text = xml_bytes.decode("utf-8", errors="ignore")
@@ -32,20 +34,29 @@ def index():
         except Exception as e:
             return render_template("index.html", error=f"XML 解析失敗：{e}")
 
-        quad_img_b64 = generate_quadrant_plot_base64(row)
-        advice = get_constitution_advice(row["Constitution"])
+        # --- 映射到 HTML 的變數 ---
+        ctx = {
+            "name": row.get("Name"),
+            "sex": row.get("Sex"),
+            "age": row.get("Age"),
+            "test_date": row.get("TestDate"),
 
-        return render_template(
-            "report.html",
-            row=row,
-            quad_img_b64=quad_img_b64,
-            advice=advice,
-        )
+            "LF": row.get("LF"),
+            "HF": row.get("HF"),
+            "TP": row.get("TP"),
+            "ln_ratio": row.get("ln_LF_HF"),
+            "ln_TP": row.get("ln_TP"),
+            "TP_Q": row.get("TP_Q"),
+
+            "constitution": row.get("Constitution"),
+            "advice": get_constitution_advice(row.get("Constitution", "")),
+            "quadrant_img": generate_quadrant_plot_base64(row),
+        }
+
+        return render_template("report.html", **ctx)
 
     return render_template("index.html")
 
 
 if __name__ == "__main__":
-    # 開發測試用
-    #app.run(host="0.0.0.0", port=5001, debug=True)
     app.run(debug=True)
