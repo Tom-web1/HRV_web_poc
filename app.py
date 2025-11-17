@@ -1,6 +1,7 @@
 # app.py
 from flask import Flask, render_template, request, make_response
 from weasyprint import HTML
+from urllib.parse import quote
 
 from hrv_core import (
     parse_hrv_xml_to_row,
@@ -74,8 +75,10 @@ def index():
 def export_pdf():
     """
     使用 WeasyPrint 將同一份 report.html 渲染成 PDF，並提供下載。
-    必須先在首頁完成一次分析，才有 last_row 可以用。
+    必須先在 / 完成一次分析，才有 last_row 可以用。
     """
+    global last_row, last_quad_img_b64, last_advice
+
     if last_row is None:
         return "請先完成一次 HRV 分析，再下載 PDF 報告。", 400
 
@@ -87,19 +90,25 @@ def export_pdf():
         advice=last_advice,
     )
 
-    # WeasyPrint 轉 PDF；base_url 讓它找得到 /static 裡的字型與 CSS
+    # WeasyPrint 轉 PDF；base_url 讓它找得到 /static 裡的字型與圖檔
     pdf_bytes = HTML(
         string=html_str,
         base_url=request.url_root
     ).write_pdf()
 
-    # 檔名：HRV_REPORT_<Name>.pdf
+    # 檔名：HRV_REPORT_<Name>.pdf，HTTP header 採 ASCII + UTF-8 雙軌
     name = last_row.get("Name") or "Unknown"
-    filename = f"HRV_REPORT_{name}.pdf"
+    safe_name = f"HRV_REPORT_{name}.pdf"
+    ascii_fallback = "HRV_REPORT.pdf"
+    utf8_name = quote(safe_name)  # URL encode 成純 ASCII
+
+    content_disposition = (
+        f"attachment; filename={ascii_fallback}; filename*=UTF-8''{utf8_name}"
+    )
 
     resp = make_response(pdf_bytes)
     resp.headers["Content-Type"] = "application/pdf"
-    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    resp.headers["Content-Disposition"] = content_disposition
     return resp
 
 
