@@ -2,7 +2,4 @@ Flask
 gunicorn
 matplotlib
 pandas
-WeasyPrint==62.3
-cairocffi
-tinycss2
-cssselect2
+playwright
