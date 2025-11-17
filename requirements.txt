@@ -2,4 +2,5 @@ Flask
 matplotlib
 gunicorn
 pandas
+WeasyPrint
 
