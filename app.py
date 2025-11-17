@@ -1,13 +1,12 @@
 # app.py
-import io
 from flask import Flask, render_template, request, make_response
+from weasyprint import HTML
+
 from hrv_core import (
     parse_hrv_xml_to_row,
     generate_quadrant_plot_base64,
     get_constitution_advice,
 )
-from xhtml2pdf import pisa
-import base64
 
 app = Flask(
     __name__,
@@ -15,98 +14,97 @@ app = Flask(
     template_folder="templates"
 )
 
-# 保存最新一次 HTML（用來匯出 PDF）
-latest_pdf_html = None
+# ====== 暫存最近一次分析結果，給 /export_pdf 用 ======
+last_row = None
+last_quad_img_b64 = None
+last_advice = None
 
 
 @app.route("/health")
 def health():
+    """給 Render 或監控用的健康檢查端點。"""
     return "OK", 200
 
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    global latest_pdf_html
+    global last_row, last_quad_img_b64, last_advice
 
     if request.method == "POST":
         xml_file = request.files.get("xml_file")
         xml_text = request.form.get("xml_text", "").strip()
 
+        # 使用者沒有提供任何東西
         if not xml_file and not xml_text:
             return render_template("index.html", error="請上傳 XML 檔案或貼上 XML 內容。")
 
-        # 讀取上傳檔案
+        # 若有上傳檔案，優先採用檔案內容
         if xml_file:
             xml_bytes = xml_file.read()
             xml_text = xml_bytes.decode("utf-8", errors="ignore")
 
-        # 解析 XML
+        # 解析 XML → HRV 指標 row
         try:
             row = parse_hrv_xml_to_row(xml_text)
         except Exception as e:
             return render_template("index.html", error=f"XML 解析失敗：{e}")
 
-        # 建立四象限圖
+        # 四象限圖（base64）與體質建議
         quad_img_b64 = generate_quadrant_plot_base64(row)
-        advice = get_constitution_advice(row["Constitution"])
+        advice = get_constitution_advice(row.get("Constitution", ""))
 
-        # ===== 建立報告 HTML（準備 PDF 用）=====
-        latest_pdf_html = render_template(
+        # 暫存供 /export_pdf 使用
+        last_row = row
+        last_quad_img_b64 = quad_img_b64
+        last_advice = advice
+
+        # 直接顯示 HTML 報告頁
+        return render_template(
             "report.html",
             row=row,
-            advice=advice,
             quad_img_b64=quad_img_b64,
+            advice=advice,
         )
 
-        # ===== 回傳畫面 =====
-        return latest_pdf_html
-
-    # GET
+    # GET：顯示首頁上傳頁
     return render_template("index.html")
 
 
-# ========== PDF 匯出 ==========
 @app.route("/export_pdf")
 def export_pdf():
-    global latest_pdf_html
+    """
+    使用 WeasyPrint 將同一份 report.html 渲染成 PDF，並提供下載。
+    必須先在首頁完成一次分析，才有 last_row 可以用。
+    """
+    if last_row is None:
+        return "請先完成一次 HRV 分析，再下載 PDF 報告。", 400
 
-    if not latest_pdf_html:
-        return "請先完成一次 HRV 分析，再下載 PDF。", 400
-
-    # ----- xhtml2pdf 產生 PDF -----
-    pdf_buffer = io.BytesIO()
-    pisa_status = pisa.CreatePDF(
-        latest_pdf_html,
-        dest=pdf_buffer,
-        encoding="utf-8"
+    # 用和畫面相同的模板產生 HTML 字串
+    html_str = render_template(
+        "report.html",
+        row=last_row,
+        quad_img_b64=last_quad_img_b64,
+        advice=last_advice,
     )
 
-    if pisa_status.err:
-        return "PDF 產生失敗，請稍後再試。", 500
+    # WeasyPrint 轉 PDF；base_url 讓它找得到 /static 裡的字型與 CSS
+    pdf_bytes = HTML(
+        string=html_str,
+        base_url=request.url_root
+    ).write_pdf()
 
-    pdf_buffer.seek(0)
+    # 檔名：HRV_REPORT_<Name>.pdf
+    name = last_row.get("Name") or "Unknown"
+    filename = f"HRV_REPORT_{name}.pdf"
 
-    # ----- PDF 檔名：HRV_REPORT_<Name>.pdf -----
-    try:
-        name = "Unknown"
-        # 嘗試從 HTML 找出 name（row.Name）
-        import re
-        m = re.search(r"姓名：([^<]+)", latest_pdf_html)
-        if m:
-            name = m.group(1).strip()
-
-        filename = f"HRV_REPORT_{name}.pdf"
-    except:
-        filename = "HRV_REPORT.pdf"
-
-    # ----- 回傳 PDF -----
-    response = make_response(pdf_buffer.read())
-    response.headers["Content-Type"] = "application/pdf"
-    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
-
-    return response
+    resp = make_response(pdf_bytes)
+    resp.headers["Content-Type"] = "application/pdf"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
 
 
 if __name__ == "__main__":
+    # 本機開發用；在 Render 上會用 gunicorn 啟動
     app.run(debug=True)
+
 
