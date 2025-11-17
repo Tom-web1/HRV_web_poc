@@ -1,0 +1,10 @@
+cat << 'EOF' > templates/index.html
+HRV XML 體質分析
+請上傳 HRV XML 檔案，或直接貼上 XML 內容，我們會自動計算 ln(LF/HF)、ln(TP)、TP_Q 與陰陽虛實體質。
+{% if error %}
+{{ error }}
+{% endif %}
+方式一：上傳 XML 檔
+方式二：貼上 XML 文字
+開始分析
+EOF
