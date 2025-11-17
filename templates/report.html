@@ -1,0 +1,72 @@
+cat << 'EOF' > templates/report.html
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>HRV 體質分析報告</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>HRV 體質分析報告</h1>
+
+    <section>
+      <h2>一、基本資料</h2>
+      <table class="info-table">
+        <tr><th>姓名</th><td>{{ row.Name }}</td></tr>
+        <tr><th>性別</th><td>{{ row.Sex }}</td></tr>
+        <tr><th>年齡</th><td>{{ row.Age }}</td></tr>
+        <tr><th>ID</th><td>{{ row.ID }}</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>二、HRV 指標</h2>
+      <table class="info-table">
+        <tr>
+          <th>LF</th>
+          <th>HF</th>
+          <th>TP</th>
+          <th>VL</th>
+          <th>ln(LF/HF)</th>
+          <th>ln(TP)</th>
+          <th>TP_Q</th>
+        </tr>
+        <tr>
+          <td>{{ "%.2f"|format(row.LF) }}</td>
+          <td>{{ "%.2f"|format(row.HF) }}</td>
+          <td>{{ "%.2f"|format(row.TP) }}</td>
+          <td>{{ "%.2f"|format(row.VL) }}</td>
+          <td>{{ row.ln_LF_HF }}</td>
+          <td>{{ row.ln_TP }}</td>
+          <td>{{ row.TP_Q }}</td>
+        </tr>
+      </table>
+    </section>
+
+    <section>
+      <h2>三、陰陽虛實四象限</h2>
+      <div class="chart-container">
+        <img src="data:image/png;base64,{{ quad_img_b64 }}" alt="HRV 四象限圖">
+      </div>
+    </section>
+
+    <section>
+      <h2>四、體質分類與建議</h2>
+      <p>依據 ln(LF/HF)（陰 ↔ 陽）與 ln(TP)（虛 ↔ 實）綜合判讀：</p>
+      <p class="constitution">
+        體質分類：
+        <span class="highlight-red">{{ row.Constitution }}</span>
+      </p>
+      <p class="advice">
+        {{ advice }}
+      </p>
+    </section>
+
+    <section>
+      <a href="{{ url_for('index') }}" class="back-link">⇦ 回上傳頁，再分析一位</a>
+    </section>
+  </div>
+</body>
+</html>
+EOF
