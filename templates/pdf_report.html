@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>HRV 自律神經體質分析報告</title>
+
+  <style>
+    /* === A4 版面設定 === */
+    @page {
+      size: A4;
+      margin: 20mm 18mm 20mm 18mm;
+    }
+
+    /* === 內嵌中文字型（NotoSansTC）=== */
+    @font-face {
+      font-family: "NotoTC";
+      src: url("{{ url_for('static', filename='NotoSansTC-Bold.ttf') }}") format("truetype");
+      font-weight: normal;
+      font-style: normal;
+    }
+
+    body {
+      font-family: "NotoTC", sans-serif;
+      font-size: 11pt;
+      line-height: 1.5;
+      color: #222;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 16pt;
+      margin: 0 0 8mm 0;
+    }
+
+    h2 {
+      font-size: 12pt;
+      margin: 4mm 0 2mm 0;
+      border-left: 3px solid #555;
+      padding-left: 6px;
+    }
+
+    .section {
+      margin-bottom: 6mm;
+    }
+
+    .kv-row {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1mm;
+      font-size: 10pt;
+    }
+
+    .kv-row td {
+      padding: 2px 4px;
+      vertical-align: top;
+    }
+
+    .kv-label {
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    table.grid {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5pt;
+      margin-top: 1mm;
+    }
+
+    table.grid th,
+    table.grid td {
+      border: 0.5pt solid #666;
+      padding: 3px 4px;
+      text-align: center;
+    }
+
+    table.grid th {
+      background: #f0f0f0;
+      font-weight: bold;
+    }
+
+    .constitution {
+      font-weight: bold;
+      color: #c0392b;
+      margin-bottom: 2mm;
+    }
+
+    .summary-text {
+      white-space: pre-line;
+      font-size: 10pt;
+    }
+
+    .footer {
+      margin-top: 8mm;
+      font-size: 8.5pt;
+      text-align: right;
+      color: #777;
+    }
+
+    .img-wrapper {
+      margin-top: 2mm;
+      text-align: center;
+    }
+
+    .img-wrapper img {
+      max-width: 100%;
+      max-height: 110mm;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- 標題 -->
+  <h1>HRV 自律神經體質分析報告</h1>
+
+  <!-- 一、基本資料 -->
+  <div class="section">
+    <h2>一、基本資料</h2>
+    <table class="kv-row">
+      <tr>
+        <td><span class="kv-label">姓名：</span>{{ row.Name }}</td>
+        <td><span class="kv-label">性別：</span>{{ row.Sex }}</td>
+        <td><span class="kv-label">年齡：</span>{{ row.Age }}</td>
+        <td><span class="kv-label">測量日期：</span>{{ row.TestDate }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 二、身體指標 -->
+  <div class="section">
+    <h2>二、身體指標</h2>
+    <table class="kv-row">
+      <tr>
+        <td><span class="kv-label">身高：</span>{{ row.Height }} cm</td>
+        <td><span class="kv-label">體重：</span>{{ row.Weight }} kg</td>
+        <td><span class="kv-label">BMI：</span>{{ row.BMI }}</td>
+        <td><span class="kv-label">BMI 狀況：</span>{{ row.BMI_Status }}</td>
+      </tr>
+      <tr>
+        <td><span class="kv-label">自律神經年齡：</span>{{ row.ANS_Age }}</td>
+        <td><span class="kv-label">年齡差值：</span>{{ row.ANS_Age_Diff }}</td>
+        <td colspan="2"></td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 三、HRV 指標摘要 -->
+  <div class="section">
+    <h2>三、HRV 指標摘要</h2>
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>HR</th>
+          <th>SD</th>
+          <th>RV</th>
+          <th>TP</th>
+          <th>LF</th>
+          <th>HF</th>
+          <th>ln(LF/HF)</th>
+          <th>ln(TP)</th>
+          <th>TP_Q（能量效率）</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ row.HR }}</td>
+          <td>{{ row.SD }}</td>
+          <td>{{ row.RV }}</td>
+          <td>{{ row.TP }}</td>
+          <td>{{ row.LF }}</td>
+          <td>{{ row.HF }}</td>
+          <td>{{ row.ln_LF_HF }}</td>
+          <td>{{ row.ln_TP }}</td>
+          <td>{{ row.TP_Q }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 四、體質判讀 -->
+  <div class="section">
+    <h2>四、體質判讀（陰陽虛實）</h2>
+    <p class="constitution">
+      體質分類：{{ row.Constitution }}
+    </p>
+    <p class="summary-text">
+      {{ advice }}
+    </p>
+  </div>
+
+  <!-- 五、ln(LF/HF) × ln(TP) 四象限圖 -->
+  {% if quad_img_b64 %}
+  <div class="section">
+    <h2>五、ln(LF/HF) × ln(TP) 四象限圖</h2>
+    <p style="font-size: 9pt;">
+      X 軸：ln(TP)（虛 → 實） · Y 軸：ln(LF/HF)（陰 → 陽）<br>
+      綠色區域為根據 Kuo(1999) 設定之年齡 × 性別健康參考範圍。
+    </p>
+    <div class="img-wrapper">
+      <img src="data:image/png;base64,{{ quad_img_b64 }}" alt="HRV Quadrant">
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="footer">
+    報告產生時間：{{ row.TestDate }}<br>
+    系統來源：HRV Deltaⁿ 自律神經體質分析系統
+  </div>
+
+</body>
+</html>
