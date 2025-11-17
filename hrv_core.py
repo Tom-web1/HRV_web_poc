@@ -1,7 +1,6 @@
 # hrv_core.py
-# HRV XML 解析 + 陰陽虛實體質判讀 + 四象限圖（含 Kuo(1999) TP 基準 Healthy Zone）
-# + BMI / ANS Age / ANS Age Diff 判讀整合版
-# + 體質說明 HTML + Healthy Zone 距離 D′ + 整體解讀
+# HRV XML 解析 + 陰陽虛實體質判讀（依 v4 邏輯）
+# 含：Kuo(1999) TP 基準、TP_Q（能量效率）、D′ 加權距離、Healthy Zone 橢圓
 
 import math
 import os
@@ -15,7 +14,6 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
-import matplotlib.patches as patches
 
 
 # ========= 字型設定 =========
@@ -50,7 +48,7 @@ def _get_font_prop():
     return _FONT_PROP
 
 
-# ========= 年齡 × 性別 TP 基準（Kuo 1999） =========
+# ========= 年齡 × 性別 TP 基準（Kuo 1999, lnTP） =========
 TP_BASE = {
     "男": [
         (29, 6.8, 0.5),
@@ -70,6 +68,35 @@ TP_BASE = {
     ],
 }
 
+def get_tp_mu_sigma(age, sex):
+    """
+    回傳 (mu, sigma) 供 lnTP 參考用。
+    """
+    sex = (sex or "").strip()
+    if sex not in TP_BASE:
+        sex = "男"
+
+    for max_age, mu, sigma in TP_BASE[sex]:
+        if age <= max_age:
+            return float(mu), float(sigma)
+
+    # 理論上不會走到這裡
+    return 6.0, 0.5
+
+
+def get_healthy_zone(age, sex):
+    """
+    保留矩形版 Healthy Zone 邊界（如有其他用途可用）：
+    lnTP 在 (μ ± 1σ)，ln(LF/HF) 在 (-0.5, 0.5)
+    """
+    mu_lnTP, sigma_lnTP = get_tp_mu_sigma(age, sex)
+    return (
+        mu_lnTP - sigma_lnTP,
+        mu_lnTP + sigma_lnTP,
+        -0.5,
+        0.5,
+    )
+
 
 # ========= 安全工具 =========
 def safe_float(x, default=0.0):
@@ -85,65 +112,51 @@ def safe_int(x, default=0):
         return default
 
 def safe_ln(x):
-    x = safe_float(x)
+    x = safe_float(x, default=float("nan"))
+    if not isinstance(x, (int, float)):
+        return float("nan")
     if x <= 0:
         return float("nan")
     return math.log(x)
 
 
-# ========= TP 參考基準 =========
-def get_tp_mu_sigma(age, sex):
-    sex = (sex or "").strip()
-    if sex not in TP_BASE:
-        sex = "男"
-
-    for max_age, mu, sigma in TP_BASE[sex]:
-        if age <= max_age:
-            return mu, sigma
-
-    # 理論上不會走到這裡
-    return 6.0, 0.5
-
-
-# ========= Healthy Zone =========
-def get_healthy_zone(age, sex):
+# ========= TP_Q（能量效率）與 D′（加權距離） =========
+def tp_quality(tp, lf, hf, vl):
     """
-    回傳：lnTP_min, lnTP_max, lnLFHF_min, lnLFHF_max
-    X 軸：lnTP 在 (μ ± 1σ)
-    Y 軸：ln(LF/HF) 在 (-0.5, 0.5)
+    v4 定義的 TP_Q（能量效率）：
+    TPQ = TP * (LF + HF) / (LF + HF + VL)
     """
-    mu_lnTP, sigma_lnTP = get_tp_mu_sigma(age, sex)
-    return (
-        mu_lnTP - sigma_lnTP,
-        mu_lnTP + sigma_lnTP,
-        -0.5,
-        0.5,
-    )
+    tp = safe_float(tp, default=float("nan"))
+    lf = safe_float(lf, default=float("nan"))
+    hf = safe_float(hf, default=float("nan"))
+    vl = safe_float(vl, default=float("nan"))
 
-
-def compute_healthy_distance(ln_tp, ln_ratio, age, sex):
-    """
-    計算相對 Healthy Zone 中心的加權距離 D′：
-    - X 軸：lnTP 以 μ, σ 標準化 → z_tp
-    - Y 軸：ln(LF/HF) 以 0 為中心，0.5 為一個單位 → z_ratio
-    D′ = sqrt(z_tp^2 + z_ratio^2)
-    數值越小代表越接近「健康基準區」。
-    """
-    if math.isnan(ln_tp) or math.isnan(ln_ratio):
+    if any(math.isnan(v) for v in (tp, lf, hf, vl)):
         return float("nan")
 
-    mu, sigma = get_tp_mu_sigma(age, sex)
-    if sigma <= 0:
+    denom = lf + hf + vl
+    if denom <= 0:
         return float("nan")
 
-    z_tp = (ln_tp - mu) / sigma
-    # 以 0 為中心，0.5 為一個單位（大約是你原本設定的 Health Zone 高度）
-    z_ratio = ln_ratio / 0.5 if 0.5 != 0 else float("nan")
+    eff = (lf + hf) / denom
+    return tp * eff
 
-    if math.isnan(z_ratio):
+
+def compute_weighted_distance(ln_ratio, ln_tpq, age, sex, w1=0.6, w2=0.4):
+    """
+    D′（加權距離），依 v4：
+    - ln_ratio = ln(LF/HF)
+    - ln_tpq   = ln(TPQ)
+    - mu       = lnTP 年齡基準
+    D′ = sqrt( w1 * ln_ratio^2 + w2 * (ln_tpq - mu)^2 )
+    """
+    mu, _ = get_tp_mu_sigma(age, sex)
+    if any(math.isnan(v) for v in (ln_ratio, ln_tpq, mu)):
         return float("nan")
 
-    return round(math.sqrt(z_tp**2 + z_ratio**2), 2)
+    dx = ln_ratio
+    dy = ln_tpq - mu
+    return round(math.sqrt(w1 * dx * dx + w2 * dy * dy), 2)
 
 
 # ========= XML 清理 =========
@@ -152,46 +165,45 @@ def _extract_patient_xml(xml_text):
     if not s:
         return ""
 
-    # 已含有 <Patient ... /> 或 <Patient> ... </Patient>
     if "<Patient" in s:
         m = re.search(r"<Patient\b[^>]*\/>", s)
         if m:
             return m.group(0)
         return s
 
-    # 有些機器輸出是 "Patient Name=..."
     if s.startswith("Patient "):
         return "<" + s
 
     return s
 
 
-# ========= 陰陽虛實分類 =========
-def classify_constitution(ln_tp, ln_ratio):
+# ========= 體質分類（依 μ 切虛實） =========
+def classify_constitution(ln_tp, ln_ratio, sex=None, age=None):
     """
-    X 軸：ln(TP)（虛 ←→ 實）
-    Y 軸：ln(LF/HF)（陰 ←→ 陽）
-
-    四象限：
-      右上：陽實型（lnTP 高 & lnLF/HF > 0）
-      右下：陽虛型（lnTP 低 & lnLF/HF > 0）
-      左上：陰實型（lnTP 高 & lnLF/HF < 0）
-      左下：陰虛型（lnTP 低 & lnLF/HF < 0）
+    使用 Kuo(1999) μ 當能量基準：
+      lnTP >= μ → 實
+      lnTP <  μ → 虛
+    搭配 ln(LF/HF) 判斷陰陽：
+      ln(LF/HF) >= 0 → 陽
+      ln(LF/HF) <  0 → 陰
     """
     if math.isnan(ln_tp) or math.isnan(ln_ratio):
         return "資料不足"
 
-    # 門檻值可之後依你實務經驗再微調
-    if ln_tp >= 6 and ln_ratio >= 0:
+    age = age or 40
+    sex = sex or "男"
+    mu, _ = get_tp_mu_sigma(age, sex)
+
+    if ln_tp >= mu and ln_ratio >= 0:
         return "陽實型"
-    if ln_tp < 6 and ln_ratio >= 0:
-        return "陽虛型"
-    if ln_tp >= 6 and ln_ratio < 0:
+    if ln_tp >= mu and ln_ratio < 0:
         return "陰實型"
+    if ln_tp < mu and ln_ratio >= 0:
+        return "陽虛型"
     return "陰虛型"
 
 
-# ========= 體質建議（短版，純文字給報告用） =========
+# ========= 體質建議（純文字） =========
 def get_constitution_advice(c):
     c = (c or "").strip()
 
@@ -230,26 +242,18 @@ def get_constitution_advice(c):
     return "資料不足，暫時無法完整判讀體質類型。"
 
 
-# ========= 體質說明 HTML（給前端直接塞進模板的「核心解釋」） =========
+# ========= 體質說明 HTML（你指定的版本） =========
 def get_constitution_explain_html():
     """
-    回傳一段固定的 HTML 說明，保留你之前 v1.4 那種「有靈魂」的描述。
+    回傳一段固定的 HTML 說明（依照 Tom 指定版本，勿改動文字）。
     """
     return """
-<h3>📝 體質說明</h3>
 <ul style="margin:8px 0 0 18px; line-height:1.6">
-  <li><b>陽實型</b>（右上）：TP 高、ln(LF/HF) > 0 ⇒ 交感旺、能量充足。<br>
-      表現：亢奮、易怒、睡淺、血壓偏高、肩頸緊繃。<br>
-      建議：放鬆訓練、調息降火、減少熬夜與過度刺激。</li>
-  <li><b>陽虛型</b>（右下）：TP 低、ln(LF/HF) > 0 ⇒ 交感主導但能量不足。<br>
-      表現：畏寒、手足冰冷、容易疲勞、下午精神下滑。<br>
-      建議：補氣助陽、規律運動、白天光照、充足睡眠。</li>
-  <li><b>陰實型</b>（左上）：TP 高、ln(LF/HF) &lt; 0 ⇒ 副交感偏強、代謝遲緩。<br>
-      表現：水腫、體重易上升、餐後愛睏、代謝指標偏高。<br>
-      建議：調整飲食結構、增加日間活動量與心肺運動。</li>
-  <li><b>陰虛型</b>（左下）：TP 低、ln(LF/HF) &lt; 0 ⇒ 能量與修復都偏低。<br>
-      表現：睡眠品質差、易心悸焦慮、恢復力差、容易覺得虛弱。<br>
-      建議：優先修復睡眠、建立規律作息、以溫和運動循序進步。</li>
+  <li><b>陽實型</b>（右上）：TP 高、ln(LF/HF) &gt; 0 ⇒ 交感旺、能量充足。表現：亢奮、易怒、睡淺、血壓偏高。建議：放鬆訓練、調息降火、避免過度刺激。</li>
+  <li><b>陽虛型</b>（右下）：TP 低、ln(LF/HF) &gt; 0 ⇒ 交感主導但能量不足。表現：畏寒、手足冷、易疲。建議：補氣助陽、規律運動、白天光照。</li>
+  <li><b>陰實型</b>（左上）：TP 高、ln(LF/HF) &lt; 0 ⇒ 副交感偏強、代謝遲緩。表現：倦怠、胃納差、濕重。建議：健脾化濕、促循環、晚間早睡。</li>
+  <li><b>陰虛型</b>（左下）：TP 低、ln(LF/HF) &lt; 0 ⇒ 陰津不足、虛熱內擾。表現：口乾、盜汗、心煩、失眠。建議：滋陰清熱、節制熬夜與刺激。</li>
+  <li><b>Healthy Zone</b>（綠色橢圓）：|ln(LF/HF)| ≤ 0.5 且 ln(TP) 落在年齡均值 μ 附近（±0.5）。距離此區越近，代表「能量適中且陰陽協調」。</li>
 </ul>
     """.strip()
 
@@ -272,31 +276,31 @@ def parse_hrv_xml_to_row(xml_text):
     name = attr.get("Name", "")
     sex = attr.get("Sex", "")
     pid = attr.get("ID", "")
-    height = safe_float(attr.get("Height", 0))
-    weight = safe_float(attr.get("Weight", 0))
+    height = safe_float(attr.get("Height", 0.0))
+    weight = safe_float(attr.get("Weight", 0.0))
     age = safe_int(attr.get("Age", 0))
     test_date = attr.get("TestDate", "")
 
     hr = safe_int(attr.get("HR", 0))
-    sd = safe_float(attr.get("SD", 0))
-    rv = safe_float(attr.get("RV", 0))
+    sd = safe_float(attr.get("SD", 0.0))
+    rv = safe_float(attr.get("RV", 0.0))
     er = safe_int(attr.get("ER", 0))
     n = safe_int(attr.get("N", 0))
 
-    tp = safe_float(attr.get("TP", 0))
-    vl = safe_float(attr.get("VL", 0))
-    lf = safe_float(attr.get("LF", 0))
-    hf = safe_float(attr.get("HF", 0))
+    tp = safe_float(attr.get("TP", 0.0))
+    vl = safe_float(attr.get("VL", 0.0))
+    lf = safe_float(attr.get("LF", 0.0))
+    hf = safe_float(attr.get("HF", 0.0))
     nn = safe_int(attr.get("NN", 0))
-    balance = safe_float(attr.get("Balance", 0))
+    balance = safe_float(attr.get("Balance", 0.0))
 
-    # --- ln values ---
+    # --- ln 值 ---
     ln_tp = safe_ln(tp)
-    ln_ratio = safe_ln(lf / hf) if hf > 0 else float("nan")
+    ln_ratio = safe_ln(lf / hf) if hf > 0 else float("nan")  # ln(LF/HF)
 
-    # --- TP_Q (能量效率) ---
-    mu, sigma = get_tp_mu_sigma(age, sex)
-    tp_q = (ln_tp - mu) / sigma if sigma > 0 and not math.isnan(ln_tp) else float("nan")
+    # --- TP_Q（能量效率）---
+    tp_q = tp_quality(tp, lf, hf, vl)
+    ln_tpq = safe_ln(tp_q)
 
     # --- BMI ---
     height_m = height / 100 if height > 5 else height
@@ -326,12 +330,11 @@ def parse_hrv_xml_to_row(xml_text):
     ans_age_diff = ans_age - age if not math.isnan(ans_age) else float("nan")
 
     # --- 體質分類 ---
-    constitution = classify_constitution(ln_tp, ln_ratio)
+    constitution = classify_constitution(ln_tp, ln_ratio, sex, age)
 
-    # --- Healthy Zone 距離 ---
-    d_prime = compute_healthy_distance(ln_tp, ln_ratio, age, sex)
+    # --- Healthy Zone 距離 D′ ---
+    d_prime = compute_weighted_distance(ln_ratio, ln_tpq, age, sex)
 
-    # --- 組裝 row ---
     row = {
         "Name": name,
         "Sex": sex,
@@ -354,7 +357,10 @@ def parse_hrv_xml_to_row(xml_text):
 
         "ln_TP": round(ln_tp, 2) if not math.isnan(ln_tp) else float("nan"),
         "ln_LF_HF": round(ln_ratio, 2) if not math.isnan(ln_ratio) else float("nan"),
+
+        # TP_Q 與 lnTPQ
         "TP_Q": round(tp_q, 2) if not math.isnan(tp_q) else float("nan"),
+        "ln_TPQ": round(ln_tpq, 2) if not math.isnan(ln_tpq) else float("nan"),
 
         "Constitution": constitution,
 
@@ -369,64 +375,69 @@ def parse_hrv_xml_to_row(xml_text):
     return row
 
 
-# ========= 整體解讀（給報告用的一段 summary） =========
+# ========= 整體解讀 Summary =========
 def build_overall_summary(row):
     """
-    輸出一段中文 summary，可以直接丟到 HTML 模板中顯示。
+    用數據講故事：體質 + TP_Q + Healthy Zone 距離 + BMI + ANS Age。
     """
     name = str(row.get("Name", "")).strip() or "受測者"
     age = safe_int(row.get("Age", 0))
     sex = str(row.get("Sex", "") or "")
+
     constitution = str(row.get("Constitution", "") or "資料不足")
 
-    ln_tp = safe_float(row.get("ln_TP"))
-    ln_ratio = safe_float(row.get("ln_LF_HF"))
+    ln_tp = safe_float(row.get("ln_TP"), default=float("nan"))
+    ln_ratio = safe_float(row.get("ln_LF_HF"), default=float("nan"))
     tp_q = row.get("TP_Q")
+    ln_tpq = safe_float(row.get("ln_TPQ"), default=float("nan"))
     bmi = row.get("BMI")
     bmi_status = row.get("BMI_Status", "")
     ans_age = row.get("ANS_Age")
     ans_age_diff = row.get("ANS_Age_Diff")
     d_prime = row.get("Healthy_Dprime")
 
+    mu, sigma = get_tp_mu_sigma(age, sex)
+
     parts = []
 
-    # 基本資訊
+    # 基本介紹
     parts.append(f"{name}（{sex}，約 {age} 歲）本次自律神經量測結果如下：")
 
     # 體質類型
     parts.append(f"依據 ln(TP) 與 ln(LF/HF) 座標判定，目前傾向於「{constitution}」。")
 
-    # 能量效率 TP_Q
-    if not (tp_q is None or math.isnan(tp_q)):
-        if abs(tp_q) < 1:
-            desc = "接近年齡與性別的平均能量水準"
-        elif tp_q > 0:
-            desc = "整體能量較同齡族群偏高"
+    # 能量效率 TP_Q（使用 lnTPQ 與 μ 來判斷高低）
+    if not math.isnan(ln_tpq) and not math.isnan(mu):
+        diff = ln_tpq - mu
+        if abs(diff) < 0.3:
+            desc = "可用能量大致落在同齡族群的平均範圍"
+        elif diff > 0:
+            desc = "可用能量（TP_Q）明顯高於同齡族群"
         else:
-            desc = "整體能量較同齡族群偏低"
+            desc = "可用能量（TP_Q）相對同齡族群偏低"
         parts.append(
-            f"ln(TP) 相對 Kuo(1999) 基準的 z 值（TP_Q）約為 {tp_q}，大致顯示{desc}。"
+            f"以 ln(TPQ) 與年齡基準 μ={mu:.2f} 比較，顯示{desc}。"
         )
 
-    # Healthy Zone 距離
-    if not (d_prime is None or math.isnan(d_prime)):
+    # Healthy Zone 距離 D′
+    if d_prime is not None and not math.isnan(d_prime):
         if d_prime < 1:
             dist_desc = "非常接近"
         elif d_prime < 2:
             dist_desc = "略偏離"
         else:
             dist_desc = "明顯偏離"
-
         parts.append(
-            f"相對『Healthy Zone』中心的加權距離 D′ 約為 {d_prime}，代表目前狀態{dist_desc}健康基準區。"
+            f"相對『Healthy Zone』（|ln(LF/HF)|≤0.5 且 ln(TP)≈μ±0.5）的加權距離 D′ 約為 {d_prime}，"
+            f"代表當前狀態{dist_desc}健康基準區。"
         )
 
     # BMI
-    if not (bmi is None or math.isnan(bmi)):
+    if bmi is not None and not math.isnan(bmi):
         parts.append(f"BMI 約為 {bmi}（{bmi_status}）。")
 
     # ANS Age
-    if not (ans_age is None or math.isnan(ans_age)):
+    if ans_age is not None and not math.isnan(ans_age):
         if ans_age_diff is None or math.isnan(ans_age_diff):
             parts.append(f"ANS 年齡推估約為 {ans_age} 歲。")
         else:
@@ -435,77 +446,98 @@ def build_overall_summary(row):
                 direction = "自律神經負擔偏高或恢復不足"
             elif ans_age_diff < 0:
                 diff_desc = f"約小 {abs(ans_age_diff)} 歲"
-                direction = "自律神經彈性較佳"
+                direction = "自律神經彈性較佳，恢復能力較好"
             else:
                 diff_desc = "與實際年齡相近"
                 direction = "整體負荷與年齡匹配"
-
             parts.append(
-                f"ANS 年齡約為 {ans_age} 歲，與實際年齡相比 {diff_desc}，"
-                f"顯示{direction}。"
+                f"ANS 年齡約為 {ans_age} 歲，與實際年齡相比 {diff_desc}，顯示{direction}。"
             )
 
     return " ".join(parts)
 
 
-# ========= 四象限圖 =========
+# ========= 四象限圖（X=ln(LF/HF), Y=lnTP, 橢圓 Healthy Zone） =========
 def generate_quadrant_plot_base64(row):
-    x = safe_float(row.get("ln_TP"))
-    y = safe_float(row.get("ln_LF_HF"))
+    # X = ln(LF/HF)；Y = ln(TP)
+    x = safe_float(row.get("ln_LF_HF"), default=float("nan"))
+    y = safe_float(row.get("ln_TP"), default=float("nan"))
 
     age = safe_int(row.get("Age", 0))
-    sex = str(row.get("Sex", ""))
+    sex = str(row.get("Sex", "") or "")
 
+    mu, sigma = get_tp_mu_sigma(age, sex)
     font_prop = _get_font_prop()
+
+    # === 設定安全座標範圍（仿 v4 簡化版） ===
+    if not math.isnan(mu):
+        y_min, y_max = mu - 2.5, mu + 2.5
+    else:
+        y_min, y_max = math.log(50), math.log(5000)  # 約 3.9 ~ 8.5
+
+    x_min, x_max = -3.5, 3.5
+
+    if not math.isnan(y):
+        if y < y_min: y_min = y - 0.3
+        if y > y_max: y_max = y + 0.3
+    if not math.isnan(x):
+        if x < x_min: x_min = x - 0.3
+        if x > x_max: x_max = x + 0.3
 
     plt.figure(figsize=(5, 5), dpi=120)
     ax = plt.gca()
 
-    # --- 分界線（虛實 & 陰陽）---
-    ax.axvline(6.0, color="gray", linestyle="--", linewidth=1)
-    ax.axhline(0.0, color="gray", linestyle="--", linewidth=1)
+    # ---- 四象限底色（虛實 × 陰陽）----
+    # 上方（實） / 下方（虛），右側（陽）/左側（陰）
+    if not math.isnan(mu):
+        ax.fill_betweenx([mu, y_max], 0, x_max, color="#FFE5B4", alpha=0.35, zorder=1)  # 右上：陽實
+        ax.fill_betweenx([y_min, mu], 0, x_max, color="#BFD7EA", alpha=0.35, zorder=1)  # 右下：陽虛
+        ax.fill_betweenx([mu, y_max], x_min, 0, color="#FFB6B9", alpha=0.35, zorder=1)  # 左上：陰實
+        ax.fill_betweenx([y_min, mu], x_min, 0, color="#C5D8A4", alpha=0.35, zorder=1)  # 左下：陰虛
 
-    # --- Healthy Zone ---
-    hx_min, hx_max, hy_min, hy_max = get_healthy_zone(age, sex)
-    rect = patches.Rectangle(
-        (hx_min, hy_min),
-        hx_max - hx_min,
-        hy_max - hy_min,
-        edgecolor="green",
-        facecolor="green",
-        alpha=0.2,
-        linewidth=1.2,
-    )
-    ax.add_patch(rect)
-    ax.text(
-        (hx_min + hx_max) / 2,
-        hy_max + 0.1,
-        "Healthy Zone",
-        ha="center",
-        va="bottom",
-        fontproperties=font_prop,
-        fontsize=9,
-        color="green",
-    )
+    # ---- 軸線 / 基準線 ----
+    ax.axvline(0, color="black", lw=0.8, zorder=2)  # 陰 / 陽 分界
+    if not math.isnan(mu) and not math.isnan(sigma):
+        ax.axhspan(mu - sigma, mu + sigma, color="#9CA3AF", alpha=0.18, zorder=2)
+        ax.axhline(mu, color="#6B7280", ls="--", lw=1, zorder=3)
 
-    # --- 測量點 ---
-    ax.scatter(x, y, s=80, color="red", zorder=3)
+    # ---- Healthy Zone 橢圓 ----
+    if not math.isnan(mu):
+        theta = [t * math.pi / 180.0 for t in range(0, 361)]
+        hx = [0.5 * math.cos(t) for t in theta]       # X 半徑 0.5（lnLF/HF）
+        hy = [mu + 0.5 * math.sin(t) for t in theta]  # Y 半徑 0.5（lnTP）
+        ax.fill(hx, hy, color="#90EE90", alpha=0.25, zorder=4)
+        ax.text(
+            0,
+            mu + 0.6,
+            "Healthy Zone",
+            ha="center",
+            va="bottom",
+            fontproperties=font_prop,
+            fontsize=9,
+            color="green",
+        )
+
+    # ---- 測量點 ----
+    ax.scatter(x, y, s=120, color="#e63946", edgecolor="white", linewidth=1.8, zorder=10)
+    ax.scatter(x, y, s=50, color="#00FF00", zorder=11)
     ax.text(
-        x,
-        y,
+        x + 0.1,
+        y + 0.1,
         " 測量點",
-        color="red",
+        color="#1e3a8a",
         fontproperties=font_prop,
         fontsize=10,
         va="center",
+        zorder=12,
     )
 
-    # --- 四象限標籤 ---
+    # ---- 象限標籤 ----
     labels = [
-        (6.8, 0.8, "陽實型"),
-        (5.2, 0.8, "陽虛型"),
-        (5.2, -0.8, "陰虛型"),
-        (6.8, -0.8, "陰實型"),
+        (1.5, mu + 1.5, "陽實型"),  # 右上
+        (1.5, mu - 1.5, "陽虛型"),  # 右下
+        (-1.5, mu - 1.5, "陰虛型"), # 左下
+        (-1.5, mu + 1.5, "陰實型"), # 左上
     ]
     for lx, ly, t in labels:
         ax.text(
@@ -513,14 +545,16 @@ def generate_quadrant_plot_base64(row):
             ly,
             t,
             fontproperties=font_prop,
-            alpha=0.7,
+            alpha=0.8,
             fontsize=9,
         )
 
-    ax.set_xlabel("ln(TP)（虛 → 實）", fontproperties=font_prop)
-    ax.set_ylabel("ln(LF/HF)（陰 → 陽）", fontproperties=font_prop)
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    ax.set_xlabel("ln(LF/HF)（陰 ←→ 陽）", fontproperties=font_prop)
+    ax.set_ylabel("ln(TP)（虛 ←→ 實）", fontproperties=font_prop)
 
-    ax.grid(alpha=0.3)
+    ax.grid(alpha=0.25)
     plt.tight_layout()
 
     buf = io.BytesIO()
@@ -529,3 +563,4 @@ def generate_quadrant_plot_base64(row):
     buf.seek(0)
 
     return base64.b64encode(buf.read()).decode("utf-8")
+
