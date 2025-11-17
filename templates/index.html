@@ -1,43 +1,280 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>HRV XML 體質分析</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="utf-8">
+  <title>HRV 自律神經體質分析</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f7;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 16px;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0 0 4px;
+      font-size: 24px;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .flex {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .col-left {
+      flex: 1 1 360px;
+      min-width: 0;
+    }
+    .col-right {
+      flex: 1 1 320px;
+      min-width: 0;
+    }
+    label {
+      font-size: 14px;
+      display: block;
+      margin-bottom: 4px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      padding: 8px;
+      font-family: monospace;
+      font-size: 13px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    input[type="file"] {
+      font-size: 13px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 8px 18px;
+      font-size: 14px;
+      border-radius: 999px;
+      border: none;
+      background: #2563eb;
+      color: #fff;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .btn:hover {
+      background: #1d4ed8;
+    }
+    .error {
+      color: #b91c1c;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    th, td {
+      padding: 4px 6px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      background: #fafafa;
+      font-weight: 600;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      margin-left: 4px;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+    .constitution {
+      font-size: 18px;
+      font-weight: 700;
+      color: #b91c1c; /* 體質紅字 */
+      margin: 4px 0 6px;
+    }
+    .section-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 8px 0 4px;
+    }
+    .summary-text, .advice-text {
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+    .explain-html {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .img-wrapper {
+      text-align: center;
+      margin-top: 8px;
+    }
+    .img-wrapper img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      background: #fff;
+    }
+  </style>
 </head>
+<body>
+  <div class="container">
 
-<body class="bg-light">
-  <div class="container py-5">
-    <h2 class="mb-4 text-center">HRV 自律神經體質分析（陰陽虛實）</h2>
+    <!-- 標題卡 -->
+    <div class="card">
+      <h1>HRV 自律神經體質分析</h1>
+      <div class="subtitle">
+        透過 HRV 數據與 Kuo(1999) TP 參考基準，定位您的
+        <b>陰陽虛實體質</b>、<b>Healthy Zone</b> 與 <b>ANS 年齡</b>。
+      </div>
+    </div>
 
-    <p class="text-muted text-center mb-4">
-      請上傳 HRV XML 檔案，或直接貼上 XML 內容，我們會自動計算
-      <code>ln(LF/HF)</code>、<code>ln(TP)</code>、<code>TP_Q</code> 與陰陽虛實體質。
-    </p>
+    <div class="flex">
 
-    <div class="card p-4 shadow">
-      <form method="post" enctype="multipart/form-data">
-        <!-- 方式一：上傳 XML 檔 -->
-        <div class="mb-4">
-          <label class="form-label fw-bold">方式一：上傳 HRV XML 檔</label>
-          <input type="file" name="xml_file" class="form-control" accept=".xml,text/xml">
-          <div class="form-text">選擇儀器匯出的 HRV XML 檔案。</div>
+      <!-- 左側：上傳 / 貼上 + 基本資訊表 -->
+      <div class="col-left">
+        <!-- 上傳卡 -->
+        <div class="card">
+          <form method="POST" enctype="multipart/form-data">
+            <div style="margin-bottom:8px;">
+              <label>1. 上傳 HRV XML 檔案（建議使用）</label>
+              <input type="file" name="xml_file" accept=".xml">
+            </div>
+
+            <div style="margin-top:8px;">
+              <label>2. 或直接貼上 XML 內容</label>
+              <textarea name="xml_text" placeholder="在此貼上 &lt;Patient ... /&gt; 或完整 XML 內容"></textarea>
+            </div>
+
+            {% if error %}
+              <div class="error">{{ error }}</div>
+            {% endif %}
+
+            <button type="submit" class="btn">開始解析與體質判讀</button>
+          </form>
         </div>
 
-        <hr>
+        <!-- 結果表格卡 -->
+        {% if row %}
+        <div class="card">
+          <div class="section-title">
+            測量基本資訊
+            {% if row.Name %}
+              <span class="tag">{{ row.Name }}</span>
+            {% endif %}
+          </div>
+          <table>
+            <tbody>
+              <tr>
+                <th>性別</th><td>{{ row.Sex }}</td>
+                <th>年齡</th><td>{{ row.Age }}</td>
+              </tr>
+              <tr>
+                <th>身高 (cm)</th><td>{{ row.Height }}</td>
+                <th>體重 (kg)</th><td>{{ row.Weight }}</td>
+              </tr>
+              <tr>
+                <th>BMI</th><td>{{ row.BMI }}（{{ row.BMI_Status }}）</td>
+                <th>測量日期</th><td>{{ row.TestDate }}</td>
+              </tr>
+              <tr>
+                <th>HR</th><td>{{ row.HR }}</td>
+                <th>SD</th><td>{{ row.SD }}</td>
+              </tr>
+              <tr>
+                <th>TP</th><td>{{ row.TP }}</td>
+                <th>VL</th><td>{{ row.VL }}</td>
+              </tr>
+              <tr>
+                <th>LF</th><td>{{ row.LF }}</td>
+                <th>HF</th><td>{{ row.HF }}</td>
+              </tr>
+              <tr>
+                <th>ln(TP)</th><td>{{ row.ln_TP }}</td>
+                <th>ln(LF/HF)</th><td>{{ row.ln_LF_HF }}</td>
+              </tr>
+              <tr>
+                <th>TP_Q</th><td>{{ row.TP_Q }}</td>
+                <th>Healthy D′</th><td>{{ row.Healthy_Dprime }}</td>
+              </tr>
+              <tr>
+                <th>ANS 年齡</th><td>{{ row.ANS_Age }}</td>
+                <th>ANS 年齡差</th><td>{{ row.ANS_Age_Diff }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
 
-        <!-- 方式二：貼上 XML 文字 -->
-        <div class="mb-4">
-          <label class="form-label fw-bold">方式二：直接貼上 XML 內容</label>
-          <textarea name="xml_text" class="form-control" rows="8"
-            placeholder='<Patient Name="Tom" Sex="男" ID="58585588" Height="173.0" Weight="66.0" Birthday="1974/06/06" TestTime="15:10:14" TestDate="2024-01-05" Age="49" HR="66" SD="59.4" RV="391.00" ER="2" N="158" TP="3086" VL="1631" LF="896" HF="503" NN="900" ANSAgeMIN="-1" ANSAgeMAX="20" Balance="-1.9"/>'></textarea>
-          <div class="form-text">若只貼單筆 XML，可以不用上傳檔案。</div>
+      <!-- 右側：四象限圖 + 體質解讀 -->
+      <div class="col-right">
+        <div class="card">
+          <div class="section-title">四象限圖：陰陽 × 虛實</div>
+
+          {% if quad_img_b64 %}
+          <div class="img-wrapper">
+            <img src="data:image/png;base64,{{ quad_img_b64 }}" alt="HRV 四象限圖">
+          </div>
+          {% else %}
+          <div style="font-size:13px; color:#666; margin-top:4px;">
+            上傳 HRV XML 後，會在此顯示 <b>ln(TP)</b> × <b>ln(LF/HF)</b> 四象限分布圖，
+            並標示您的測量點與年齡、性別對應的 Healthy Zone。
+          </div>
+          {% endif %}
         </div>
 
-        <div class="d-grid">
-          <button type="submit" class="btn btn-primary btn-lg">開始分析</button>
+        <div class="card">
+          <div class="section-title">體質判讀</div>
+
+          {% if constitution %}
+            <div class="constitution">目前體質傾向：{{ constitution }}</div>
+          {% endif %}
+
+          {% if summary_text %}
+            <div class="section-title">整體解讀 Summary</div>
+            <div class="summary-text">{{ summary_text }}</div>
+          {% endif %}
+
+          {% if advice_text %}
+            <div class="section-title">養生建議</div>
+            <div class="advice-text">{{ advice_text }}</div>
+          {% endif %}
         </div>
-      </form>
+
+        <div class="card">
+          <div class="section-title">📝 體質說明（模型說明）</div>
+          <div class="explain-html">
+            {{ explain_html|safe }}
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </body>
