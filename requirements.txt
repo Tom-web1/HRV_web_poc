@@ -3,4 +3,5 @@ matplotlib
 gunicorn
 pandas
 WeasyPrint
-
+matplotlib
+pdfkit
