@@ -2,5 +2,4 @@ Flask
 matplotlib
 gunicorn
 pandas
-matplotlib
-pdfkit
+xhtml2pdf
