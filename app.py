@@ -59,7 +59,7 @@ def index():
         last_quad_img_b64 = quad_img_b64
         last_advice = advice
 
-        # 直接顯示 HTML 報告頁
+        # ✅ 前端網頁版：還是用原本的 report.html（含 Bootstrap）
         return render_template(
             "report.html",
             row=row,
@@ -74,7 +74,7 @@ def index():
 @app.route("/export_pdf")
 def export_pdf():
     """
-    使用 WeasyPrint 將同一份 report.html 渲染成 PDF，並提供下載。
+    使用 WeasyPrint 將「專用的 pdf_report.html 模板」渲染成 A4 PDF，並提供下載。
     必須先在 / 完成一次分析，才有 last_row 可以用。
     """
     global last_row, last_quad_img_b64, last_advice
@@ -82,9 +82,9 @@ def export_pdf():
     if last_row is None:
         return "請先完成一次 HRV 分析，再下載 PDF 報告。", 400
 
-    # 用和畫面相同的模板產生 HTML 字串
+    # ✅ PDF 使用獨立排版模板：pdf_report.html（不走 Bootstrap）
     html_str = render_template(
-        "report.html",
+        "pdf_report.html",
         row=last_row,
         quad_img_b64=last_quad_img_b64,
         advice=last_advice,
@@ -96,7 +96,7 @@ def export_pdf():
         base_url=request.url_root
     ).write_pdf()
 
-    # 檔名：HRV_REPORT_<Name>.pdf，HTTP header 採 ASCII + UTF-8 雙軌
+    # 檔名：HRV_REPORT_<Name>.pdf，HTTP header 採 ASCII + UTF-8 雙軌避免亂碼 & header error
     name = last_row.get("Name") or "Unknown"
     safe_name = f"HRV_REPORT_{name}.pdf"
     ascii_fallback = "HRV_REPORT.pdf"
@@ -115,5 +115,3 @@ def export_pdf():
 if __name__ == "__main__":
     # 本機開發用；在 Render 上會用 gunicorn 啟動
     app.run(debug=True)
-
-
