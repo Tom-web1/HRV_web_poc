@@ -17,19 +17,23 @@ import matplotlib.patches as patches
 
 
 # ========= 字型設定 =========
+# 優先使用專案內 /static/NotoSansTC-*.ttf，跨平台避免中文變豆腐
 
-# 你可以依環境調整這幾個路徑
+_BASE_DIR = os.path.dirname(__file__)
+
 FONT_CANDIDATES = [
-    "/System/Library/Fonts/PingFang.ttc",     # macOS 預設中文
+    os.path.join(_BASE_DIR, "static", "NotoSansTC-Bold.ttf"),
+    os.path.join(_BASE_DIR, "static", "NotoSansTC-Black.ttf"),
+    "/System/Library/Fonts/PingFang.ttc",     # macOS
     "/Library/Fonts/PingFang TC.ttc",
-    "C:/Windows/Fonts/msjh.ttc",             # Windows 微軟正黑體
+    "C:/Windows/Fonts/msjh.ttc",              # Windows 微軟正黑體
 ]
 
 _FONT_PROP = None
 
 
 def _get_font_prop():
-    """嘗試載入系統中的中文字型，沒有就回傳 None。"""
+    """嘗試載入中文字型，優先用專案內的 NotoSansTC。"""
     global _FONT_PROP
     if _FONT_PROP is not None:
         return _FONT_PROP
@@ -38,11 +42,16 @@ def _get_font_prop():
         if os.path.exists(path):
             try:
                 _FONT_PROP = fm.FontProperties(fname=path)
+                print(f"[Font] Using font: {path}")
                 return _FONT_PROP
-            except Exception:
+            except Exception as e:
+                print(f"[Font] Failed to load {path}: {e}")
                 continue
-    _FONT_PROP = None
-    return None
+
+    # fallback：就算沒有中文字型，也不要讓程式掛掉
+    _FONT_PROP = fm.FontProperties()
+    print("[Font] No custom font found, using default font.")
+    return _FONT_PROP
 
 
 # ========= Kuo(1999) 年齡 × 性別 TP 基準（ln 值） =========
@@ -164,7 +173,8 @@ def parse_hrv_xml_to_row(xml_text: str) -> dict:
     """
     解析單筆 HRV XML（或內含 Patient 標籤的字串），
     回傳一個 dict，包含：
-      Name, Sex, Age, ID, Height, Weight, HR, SD, RV, ER, N,
+      Name, Sex, Age, ID, Height, Weight, TestDate,
+      HR, SD, RV, ER, N,
       TP, VL, LF, HF, NN, Balance,
       ln_LF_HF, ln_TP, TP_Q, Constitution
     """
@@ -190,6 +200,7 @@ def parse_hrv_xml_to_row(xml_text: str) -> dict:
     height = safe_float(attr.get("Height", 0))
     weight = safe_float(attr.get("Weight", 0))
     age = safe_int(attr.get("Age", 0))
+    test_date = attr.get("TestDate", "")  # 給報告用的測量日期
 
     hr = safe_int(attr.get("HR", 0))
     sd = safe_float(attr.get("SD", 0.0))
@@ -222,20 +233,21 @@ def parse_hrv_xml_to_row(xml_text: str) -> dict:
         "Name": name,
         "Sex": sex,
         "ID": pid,
-        "Height": height,
-        "Weight": weight,
+        "Height": round(height, 2),
+        "Weight": round(weight, 2),
         "Age": age,
+        "TestDate": test_date,
         "HR": hr,
-        "SD": sd,
-        "RV": rv,
+        "SD": round(sd, 2),
+        "RV": round(rv, 2),
         "ER": er,
         "N": n,
-        "TP": tp,
-        "VL": vl,
-        "LF": lf,
-        "HF": hf,
+        "TP": round(tp, 2),
+        "VL": round(vl, 2),
+        "LF": round(lf, 2),
+        "HF": round(hf, 2),
         "NN": nn,
-        "Balance": balance,
+        "Balance": round(balance, 2),
         "ln_TP": round(ln_tp, 2) if not math.isnan(ln_tp) else float("nan"),
         "ln_LF_HF": round(ln_ratio, 2) if not math.isnan(ln_ratio) else float("nan"),
         "TP_Q": round(tp_q, 2) if not math.isnan(tp_q) else float("nan"),
@@ -365,31 +377,19 @@ def generate_quadrant_plot_base64(row: dict) -> str:
     hz_label_x = (hx_min + hx_max) / 2
     hz_label_y = (hy_min + hy_max) / 2
     label_text = "正常參考區"
-    if font_prop:
-        ax.text(
-            hz_label_x, hz_label_y, label_text,
-            fontproperties=font_prop, color="green",
-            ha="center", va="center"
-        )
-    else:
-        ax.text(
-            hz_label_x, hz_label_y, label_text,
-            color="green", ha="center", va="center"
-        )
+    ax.text(
+        hz_label_x, hz_label_y, label_text,
+        fontproperties=font_prop, color="green",
+        ha="center", va="center"
+    )
 
     # 個人紅點
     ax.scatter(x, y, s=80, color="red", zorder=5)
-    if font_prop:
-        ax.text(
-            x, y, "  測量點",
-            fontproperties=font_prop, fontsize=9,
-            va="center", color="red"
-        )
-    else:
-        ax.text(
-            x, y, "  測量點",
-            fontsize=9, va="center", color="red"
-        )
+    ax.text(
+        x, y, "  測量點",
+        fontproperties=font_prop, fontsize=9,
+        va="center", color="red"
+    )
 
     # 四個象限標籤
     quad_labels = [
@@ -399,27 +399,16 @@ def generate_quadrant_plot_base64(row: dict) -> str:
         (x_threshold + 0.8, y_threshold - 0.8, "陰實型"),
     ]
     for qx, qy, text in quad_labels:
-        if font_prop:
-            ax.text(
-                qx, qy, text,
-                fontproperties=font_prop,
-                fontsize=10, alpha=0.8,
-                ha="center", va="center"
-            )
-        else:
-            ax.text(
-                qx, qy, text,
-                fontsize=10, alpha=0.8,
-                ha="center", va="center"
-            )
+        ax.text(
+            qx, qy, text,
+            fontproperties=font_prop,
+            fontsize=10, alpha=0.8,
+            ha="center", va="center"
+        )
 
     # 軸標籤
-    if font_prop:
-        ax.set_xlabel("ln(TP)（虛  →  實）", fontproperties=font_prop)
-        ax.set_ylabel("ln(LF/HF)（陰  →  陽）", fontproperties=font_prop)
-    else:
-        ax.set_xlabel("ln(TP) (虚→實)")
-        ax.set_ylabel("ln(LF/HF) (陰→陽)")
+    ax.set_xlabel("ln(TP)（虛  →  實）", fontproperties=font_prop)
+    ax.set_ylabel("ln(LF/HF)（陰  →  陽）", fontproperties=font_prop)
 
     # 根據測量 + 正常區決定顯示範圍
     x_min = min(x, x_threshold, hx_min)
