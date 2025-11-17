@@ -1,10 +1,44 @@
-cat << 'EOF' > templates/index.html
-HRV XML 體質分析
-請上傳 HRV XML 檔案，或直接貼上 XML 內容，我們會自動計算 ln(LF/HF)、ln(TP)、TP_Q 與陰陽虛實體質。
-{% if error %}
-{{ error }}
-{% endif %}
-方式一：上傳 XML 檔
-方式二：貼上 XML 文字
-開始分析
-EOF
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>HRV XML 體質分析</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+  <div class="container py-5">
+    <h2 class="mb-4 text-center">HRV 自律神經體質分析（陰陽虛實）</h2>
+
+    <p class="text-muted text-center mb-4">
+      請上傳 HRV XML 檔案，或直接貼上 XML 內容，我們會自動計算
+      <code>ln(LF/HF)</code>、<code>ln(TP)</code>、<code>TP_Q</code> 與陰陽虛實體質。
+    </p>
+
+    <div class="card p-4 shadow">
+      <form method="post" enctype="multipart/form-data">
+        <!-- 方式一：上傳 XML 檔 -->
+        <div class="mb-4">
+          <label class="form-label fw-bold">方式一：上傳 HRV XML 檔</label>
+          <input type="file" name="xml_file" class="form-control" accept=".xml,text/xml">
+          <div class="form-text">選擇儀器匯出的 HRV XML 檔案。</div>
+        </div>
+
+        <hr>
+
+        <!-- 方式二：貼上 XML 文字 -->
+        <div class="mb-4">
+          <label class="form-label fw-bold">方式二：直接貼上 XML 內容</label>
+          <textarea name="xml_text" class="form-control" rows="8"
+            placeholder='<Patient Name="Tom" Sex="男" ID="58585588" Height="173.0" Weight="66.0" Birthday="1974/06/06" TestTime="15:10:14" TestDate="2024-01-05" Age="49" HR="66" SD="59.4" RV="391.00" ER="2" N="158" TP="3086" VL="1631" LF="896" HF="503" NN="900" ANSAgeMIN="-1" ANSAgeMAX="20" Balance="-1.9"/>'></textarea>
+          <div class="form-text">若只貼單筆 XML，可以不用上傳檔案。</div>
+        </div>
+
+        <div class="d-grid">
+          <button type="submit" class="btn btn-primary btn-lg">開始分析</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</body>
+</html>
