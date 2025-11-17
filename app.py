@@ -34,29 +34,23 @@ def index():
         except Exception as e:
             return render_template("index.html", error=f"XML 解析失敗：{e}")
 
-        # --- 映射到 HTML 的變數 ---
-        ctx = {
-            "name": row.get("Name"),
-            "sex": row.get("Sex"),
-            "age": row.get("Age"),
-            "test_date": row.get("TestDate"),
+        # 取得象限圖
+        quad_img_b64 = generate_quadrant_plot_base64(row)
 
-            "LF": row.get("LF"),
-            "HF": row.get("HF"),
-            "TP": row.get("TP"),
-            "ln_ratio": row.get("ln_LF_HF"),
-            "ln_TP": row.get("ln_TP"),
-            "TP_Q": row.get("TP_Q"),
+        # 取得建議文字
+        advice = get_constitution_advice(row["Constitution"])
 
-            "constitution": row.get("Constitution"),
-            "advice": get_constitution_advice(row.get("Constitution", "")),
-            "quadrant_img": generate_quadrant_plot_base64(row),
-        }
-
-        return render_template("report.html", **ctx)
+        # 直接整包丟給 HTML
+        return render_template(
+            "report.html",
+            row=row,
+            quad_img_b64=quad_img_b64,
+            advice=advice,
+        )
 
     return render_template("index.html")
 
 
 if __name__ == "__main__":
     app.run(debug=True)
+
