@@ -1,5 +1,8 @@
 Flask
-matplotlib
 gunicorn
+matplotlib
 pandas
-xhtml2pdf
+WeasyPrint==62.3
+cairocffi
+tinycss2
+cssselect2
