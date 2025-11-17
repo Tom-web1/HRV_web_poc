@@ -11,8 +11,10 @@
     .kv-label { font-weight: 600; }
   </style>
 </head>
+
 <body>
   <div class="container py-4">
+
     <h2 class="mb-3 text-center">HRV 自律神經體質分析報告</h2>
 
     <!-- 基本資訊 -->
@@ -20,18 +22,19 @@
       <div class="card-body">
         <h5 class="card-title">基本資料</h5>
         <div class="row">
-          <div class="col-md-3"><span class="kv-label">姓名：</span>{{ name }}</div>
-          <div class="col-md-3"><span class="kv-label">性別：</span>{{ sex }}</div>
-          <div class="col-md-3"><span class="kv-label">年齡：</span>{{ age }}</div>
-          <div class="col-md-3"><span class="kv-label">測量日期：</span>{{ test_date }}</div>
+          <div class="col-md-3"><span class="kv-label">姓名：</span>{{ row.Name }}</div>
+          <div class="col-md-3"><span class="kv-label">性別：</span>{{ row.Sex }}</div>
+          <div class="col-md-3"><span class="kv-label">年齡：</span>{{ row.Age }}</div>
+          <div class="col-md-3"><span class="kv-label">測量日期：</span>{{ row.TestDate }}</div>
         </div>
       </div>
     </div>
 
-    <!-- HRV 指標 -->
+    <!-- HRV 指標摘要 -->
     <div class="card shadow-sm">
       <div class="card-body">
         <h5 class="card-title">HRV 指標摘要</h5>
+
         <div class="table-responsive">
           <table class="table table-sm table-bordered align-middle">
             <thead class="table-light">
@@ -44,18 +47,20 @@
                 <th>TP_Q（能量效率）</th>
               </tr>
             </thead>
+
             <tbody>
               <tr>
-                <td>{{ LF }}</td>
-                <td>{{ HF }}</td>
-                <td>{{ TP }}</td>
-                <td>{{ ln_ratio }}</td>
-                <td>{{ ln_TP }}</td>
-                <td>{{ TP_Q }}</td>
+                <td>{{ row.LF }}</td>
+                <td>{{ row.HF }}</td>
+                <td>{{ row.TP }}</td>
+                <td>{{ row.ln_LF_HF }}</td>
+                <td>{{ row.ln_TP }}</td>
+                <td>{{ row.TP_Q }}</td>
               </tr>
             </tbody>
           </table>
         </div>
+
       </div>
     </div>
 
@@ -63,17 +68,19 @@
     <div class="card shadow-sm">
       <div class="card-body">
         <h5 class="card-title">體質判讀（陰陽虛實）</h5>
+
         <p class="constitution">
-          體質分類：{{ constitution }}
+          體質分類：{{ row.Constitution }}
         </p>
+
         <p style="white-space: pre-line;">
-          {{ summary or advice }}
+          {{ advice }}
         </p>
       </div>
     </div>
 
     <!-- 象限圖 -->
-    {% if quadrant_img %}
+    {% if quad_img_b64 %}
     <div class="card shadow-sm">
       <div class="card-body">
         <h5 class="card-title">ln(LF/HF) × ln(TP) 四象限圖</h5>
@@ -81,7 +88,10 @@
           X 軸：ln(TP)（虛 → 實） · Y 軸：ln(LF/HF)（陰 → 陽）<br>
           綠色區域為根據 Kuo(1999) 設定之年齡 × 性別健康參考範圍。
         </p>
-        <img src="data:image/png;base64,{{ quadrant_img }}" class="img-fluid border" alt="HRV Quadrant">
+
+        <img src="data:image/png;base64,{{ quad_img_b64 }}" 
+             class="img-fluid border"
+             alt="HRV Quadrant">
       </div>
     </div>
     {% endif %}
@@ -89,6 +99,8 @@
     <div class="text-center mt-4">
       <a href="/" class="btn btn-secondary">回首頁重新分析</a>
     </div>
+
   </div>
 </body>
 </html>
+
