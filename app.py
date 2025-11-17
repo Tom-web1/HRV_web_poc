@@ -19,7 +19,7 @@ app = Flask(
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "GET":
-        # 初始畫面，只給體質說明那一段 HTML
+        # 初始畫面：只先顯示體質說明
         explain_html = get_constitution_explain_html()
         return render_template(
             "index.html",
@@ -86,11 +86,10 @@ def index():
     # 3) 產生四象限圖
     try:
         quad_img_b64 = generate_quadrant_plot_base64(row)
+        error_msg = None
     except Exception as e:
         quad_img_b64 = None
         error_msg = f"四象限圖產生失敗：{e}"
-    else:
-        error_msg = None
 
     # 4) 體質與建議 / summary
     constitution = row.get("Constitution", "資料不足")
@@ -113,4 +112,3 @@ def index():
 if __name__ == "__main__":
     # 開發模式
     app.run(host="0.0.0.0", port=5001, debug=True)
-
